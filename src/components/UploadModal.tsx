@@ -31,6 +31,19 @@ const UploadModal = ({ open, onClose, onUploaded }: UploadModalProps) => {
     setUploading(true);
     setProgress(0);
 
+    // Cloudinary Free Plan limit is 10MB for raw/image files
+    const CLOUDINARY_LIMIT = 10 * 1024 * 1024; // 10MB
+    if (file.size > CLOUDINARY_LIMIT) {
+      toast({
+        title: "File too large ⚠️",
+        description: `Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB. The free plan limit is 10MB. Please compress your PDF.`,
+        variant: "destructive",
+      });
+      setUploading(false);
+      setProgress(0);
+      return;
+    }
+
     try {
       // 1. Get signature
       const { data: { signature, timestamp, cloudName, apiKey } } = await api.get("/upload-signature");
