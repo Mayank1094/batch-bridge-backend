@@ -1,33 +1,58 @@
 const express = require('express');
 const router = express.Router();
 const Note = require('../models/Note');
-const upload = require('../config/multer');
+
 const cloudinary = require('../config/cloudinary');
 const adminAuth = require('../middleware/auth');
 const { uploadLimiter } = require('../middleware/rateLimit');
 
-// @route   POST /api/upload
-// @desc    Upload a new note
+// @route   GET /api/upload-signature
+// @desc    Get signature for client-side upload
 // @access  Public
-router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) => {
+router.get('/upload-signature', uploadLimiter, (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ error: 'Please upload a file' });
+        const timestamp = Math.round((new Date).getTime() / 1000);
+        const signature = cloudinary.utils.api_sign_request({
+            timestamp: timestamp,
+            folder: 'batch-bridge-notes'
+        }, process.env.CLOUDINARY_API_SECRET);
+
+        res.json({
+            timestamp,
+            signature,
+            cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+            apiKey: process.env.CLOUDINARY_API_KEY
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Server Error' });
+    }
+});
+
+// @route   POST /api/upload
+// @desc    Save note metadata after client-side upload
+// @access  Public
+router.post('/upload', uploadLimiter, async (req, res) => {
+    try {
+        const { subject, unit, fileUrl, publicId } = req.body;
+
+        if (!fileUrl || !publicId) {
+            return res.status(400).json({ error: 'Missing file information' });
         }
 
-        const { subject, unit } = req.body;
-
         if (!subject || !unit) {
-            // If validation fails, we should delete the uploaded file from Cloudinary to save space
-            await cloudinary.uploader.destroy(req.file.filename, { resource_type: 'raw' });
+            // If we have the publicId, we should try to delete the orphaned file from Cloudinary
+            if (publicId) {
+                await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
+            }
             return res.status(400).json({ error: 'Please provide subject and unit' });
         }
 
         const newNote = new Note({
             subject,
             unit,
-            fileUrl: req.file.path,
-            publicId: req.file.filename
+            fileUrl,
+            publicId
         });
 
         const savedNote = await newNote.save();
@@ -38,8 +63,9 @@ router.post('/upload', uploadLimiter, upload.single('file'), async (req, res) =>
         });
     } catch (error) {
         console.error(error);
-        if (req.file) {
-            await cloudinary.uploader.destroy(req.file.filename, { resource_type: 'raw' });
+        // If there's a server error saving to DB, try to clean up the uploaded file
+        if (req.body.publicId) {
+            await cloudinary.uploader.destroy(req.body.publicId, { resource_type: 'raw' });
         }
         res.status(500).json({ error: 'Server Error' });
     }

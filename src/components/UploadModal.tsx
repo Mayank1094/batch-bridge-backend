@@ -4,6 +4,7 @@ import { X, Upload, FileUp, CheckCircle2 } from "lucide-react";
 import { SUBJECTS, UNITS, type Subject, type Unit } from "@/lib/data";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/api/axios";
+import axios from "axios";
 
 interface UploadModalProps {
   open: boolean;
@@ -30,24 +31,43 @@ const UploadModal = ({ open, onClose, onUploaded }: UploadModalProps) => {
     setUploading(true);
     setProgress(0);
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("subject", subject);
-    formData.append("unit", unit.toString());
-
     try {
-      await api.post("/upload", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-        onUploadProgress: (progressEvent) => {
-          if (progressEvent.total) {
-            const percentCompleted = Math.round(
-              (progressEvent.loaded * 100) / progressEvent.total
-            );
-            setProgress(percentCompleted);
-          }
-        },
+      // 1. Get signature
+      const { data: { signature, timestamp, cloudName, apiKey } } = await api.get("/upload-signature");
+
+      // 2. Upload to Cloudinary
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("api_key", apiKey);
+      formData.append("timestamp", timestamp.toString());
+      formData.append("signature", signature);
+      formData.append("folder", "batch-bridge-notes");
+
+      // Use axios for upload progress
+      const cloudinaryResponse = await axios.post(
+        `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+          onUploadProgress: (progressEvent) => {
+            if (progressEvent.total) {
+              const percentCompleted = Math.round(
+                (progressEvent.loaded * 100) / progressEvent.total
+              );
+              setProgress(percentCompleted);
+            }
+          },
+        }
+      );
+
+      const { secure_url, public_id } = cloudinaryResponse.data;
+
+      // 3. Save metadata to backend
+      await api.post("/upload", {
+        subject,
+        unit,
+        fileUrl: secure_url,
+        publicId: public_id,
       });
 
       toast({
@@ -61,7 +81,7 @@ const UploadModal = ({ open, onClose, onUploaded }: UploadModalProps) => {
       console.error(error);
       toast({
         title: "Upload failed ❌",
-        description: error.response?.data?.error || "Something went wrong",
+        description: error.response?.data?.error || error.message || "Something went wrong",
         variant: "destructive",
       });
     } finally {
