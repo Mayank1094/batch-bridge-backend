@@ -35,6 +35,10 @@ const UploadModal = ({ open, onClose, onUploaded }: UploadModalProps) => {
       // 1. Get signature
       const { data: { signature, timestamp, cloudName, apiKey } } = await api.get("/upload-signature");
 
+      if (!cloudName || !apiKey || !signature || !timestamp) {
+        throw new Error("Failed to get upload signature");
+      }
+
       // 2. Upload to Cloudinary
       const formData = new FormData();
       formData.append("file", file);
@@ -60,7 +64,15 @@ const UploadModal = ({ open, onClose, onUploaded }: UploadModalProps) => {
         }
       );
 
+      if (!cloudinaryResponse.data) {
+        throw new Error("Invalid response from Cloudinary");
+      }
+
       const { secure_url, public_id } = cloudinaryResponse.data;
+
+      if (!secure_url || !public_id) {
+        throw new Error("Cloudinary response missing url or public_id");
+      }
 
       // 3. Save metadata to backend
       await api.post("/upload", {
@@ -79,9 +91,15 @@ const UploadModal = ({ open, onClose, onUploaded }: UploadModalProps) => {
       setFile(null);
     } catch (error: any) {
       console.error(error);
+      const errorMessage =
+        error.response?.data?.error?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        "Something went wrong";
+
       toast({
         title: "Upload failed ❌",
-        description: error.response?.data?.error || error.message || "Something went wrong",
+        description: typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage),
         variant: "destructive",
       });
     } finally {
@@ -198,7 +216,7 @@ const UploadModal = ({ open, onClose, onUploaded }: UploadModalProps) => {
                   <motion.div
                     className="h-full bg-primary"
                     initial={{ width: 0 }}
-                    animate={{ width: `${progress}%` }}
+                    animate={{ width: `${Math.min(100, Math.max(0, progress || 0))}%` }}
                     transition={{ duration: 0.1 }}
                   />
                 </div>
