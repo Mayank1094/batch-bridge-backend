@@ -6,7 +6,7 @@ const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
         folder: 'batch-bridge-notes',
-        resource_type: 'raw', // Important for PDFs and large files
+        resource_type: 'auto', // Handle both images and PDFs automatically
         public_id: (req, file) => file.originalname.split('.')[0] + '-' + Date.now(),
     },
 });
