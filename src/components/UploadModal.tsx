@@ -4,7 +4,8 @@ import { X, Upload, FileUp, CheckCircle2 } from "lucide-react";
 import { SUBJECTS, UNITS, type Subject, type Unit } from "@/lib/data";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/api/axios";
-import axios from "axios";
+import { storage } from "@/config/firebase";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 
 interface UploadModalProps {
   open: boolean;
@@ -31,92 +32,68 @@ const UploadModal = ({ open, onClose, onUploaded }: UploadModalProps) => {
     setUploading(true);
     setProgress(0);
 
-    // Cloudinary Free Plan limit is 10MB. Warn but allow proceed (in case plan upgraded).
-    const CLOUDINARY_LIMIT = 10 * 1024 * 1024; // 10MB
-    if (file.size > CLOUDINARY_LIMIT) {
-      toast({
-        title: "Large File Warning ⚠️",
-        description: `File is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Free plan limit is 10MB. Upload may fail unless compressed.`,
-        duration: 6000,
-      });
-      // We don't return here anymore, we let them try if they want
-    }
+    // No strict file size limit for Firebase (5GB total storage)
 
     try {
-      // 1. Get signature
-      const { data: { signature, timestamp, cloudName, apiKey } } = await api.get("/upload-signature");
+      // 1. Create a reference
+      const storageRef = ref(storage, `notes/${Date.now()}-${file.name}`);
 
-      if (!cloudName || !apiKey || !signature || !timestamp) {
-        throw new Error("Failed to get upload signature");
-      }
+      // 2. Start upload
+      const uploadTask = uploadBytesResumable(storageRef, file);
 
-      // Determine resource type: 'raw' for PDF to avoid 10MB image limit/processing, 'auto' for others
-      const resourceType = file.type === 'application/pdf' ? 'raw' : 'auto';
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          // Progress
+          const percent = Math.round(
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+          );
+          setProgress(percent);
+        },
+        (error) => {
+          // Error
+          console.error(error);
+          toast({
+            title: "Upload failed ❌",
+            description: error.message,
+            variant: "destructive",
+          });
+          setUploading(false);
+          setProgress(0);
+        },
+        async () => {
+          // Success
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
 
-      // 2. Upload to Cloudinary
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("api_key", apiKey);
-      formData.append("timestamp", timestamp.toString());
-      formData.append("signature", signature);
-      formData.append("folder", "batch-bridge-notes");
+          // 3. Save metadata to backend
+          // We use the full path as publicId for potential future deletion needs
+          await api.post("/upload", {
+            subject,
+            unit,
+            fileUrl: downloadURL,
+            publicId: uploadTask.snapshot.ref.fullPath,
+          });
 
-      // Use axios for upload progress
-      const cloudinaryResponse = await axios.post(
-        `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-          onUploadProgress: (progressEvent) => {
-            if (progressEvent.total) {
-              const percentCompleted = Math.round(
-                (progressEvent.loaded * 100) / progressEvent.total
-              );
-              setProgress(percentCompleted);
-            }
-          },
+          toast({
+            title: "Note uploaded! 🎉",
+            description: "Your note has been submitted for approval.",
+          });
+          onUploaded();
+          onClose();
+          setFile(null);
+          setUploading(false);
+          setProgress(0);
         }
       );
-
-      if (!cloudinaryResponse.data) {
-        throw new Error("Invalid response from Cloudinary");
-      }
-
-      const { secure_url, public_id } = cloudinaryResponse.data;
-
-      if (!secure_url || !public_id) {
-        throw new Error("Cloudinary response missing url or public_id");
-      }
-
-      // 3. Save metadata to backend
-      await api.post("/upload", {
-        subject,
-        unit,
-        fileUrl: secure_url,
-        publicId: public_id,
-      });
-
-      toast({
-        title: "Note uploaded! 🎉",
-        description: "Your note has been submitted for approval.",
-      });
-      onUploaded();
-      onClose();
-      setFile(null);
     } catch (error: any) {
       console.error(error);
-      const errorMessage =
-        error.response?.data?.error?.message ||
-        error.response?.data?.error ||
-        error.message ||
-        "Something went wrong";
+      const errorMessage = error.message || "Something went wrong";
 
       toast({
         title: "Upload failed ❌",
-        description: typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage),
+        description: errorMessage,
         variant: "destructive",
       });
-    } finally {
       setUploading(false);
       setProgress(0);
     }
