@@ -4,10 +4,21 @@ const cloudinary = require('./cloudinary');
 
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
-    params: {
-        folder: 'batch-bridge-notes',
-        resource_type: 'auto', // Handle both images and PDFs automatically
-        public_id: (req, file) => file.originalname.split('.')[0] + '-' + Date.now(),
+    params: async (req, file) => {
+        let resourceType = 'image';
+        let format = undefined;
+
+        if (file.mimetype === 'application/pdf') {
+            resourceType = 'raw';
+            format = 'pdf';
+        }
+
+        return {
+            folder: 'batch-bridge-notes',
+            resource_type: resourceType,
+            format: format,
+            public_id: file.originalname.split('.')[0] + '-' + Date.now(),
+        };
     },
 });
 
