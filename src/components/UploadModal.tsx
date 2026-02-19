@@ -39,6 +39,9 @@ const UploadModal = ({ open, onClose, onUploaded }: UploadModalProps) => {
         throw new Error("Failed to get upload signature");
       }
 
+      // Determine resource type: 'raw' for PDF to avoid 10MB image limit/processing, 'auto' for others
+      const resourceType = file.type === 'application/pdf' ? 'raw' : 'auto';
+
       // 2. Upload to Cloudinary
       const formData = new FormData();
       formData.append("file", file);
@@ -49,7 +52,7 @@ const UploadModal = ({ open, onClose, onUploaded }: UploadModalProps) => {
 
       // Use axios for upload progress
       const cloudinaryResponse = await axios.post(
-        `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`,
+        `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },
