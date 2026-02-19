@@ -31,17 +31,15 @@ const UploadModal = ({ open, onClose, onUploaded }: UploadModalProps) => {
     setUploading(true);
     setProgress(0);
 
-    // Cloudinary Free Plan limit is 10MB for raw/image files
+    // Cloudinary Free Plan limit is 10MB. Warn but allow proceed (in case plan upgraded).
     const CLOUDINARY_LIMIT = 10 * 1024 * 1024; // 10MB
     if (file.size > CLOUDINARY_LIMIT) {
       toast({
-        title: "File too large ⚠️",
-        description: `Your file is ${(file.size / (1024 * 1024)).toFixed(2)}MB. The free plan limit is 10MB. Please compress your PDF.`,
-        variant: "destructive",
+        title: "Large File Warning ⚠️",
+        description: `File is ${(file.size / (1024 * 1024)).toFixed(2)}MB. Free plan limit is 10MB. Upload may fail unless compressed.`,
+        duration: 6000,
       });
-      setUploading(false);
-      setProgress(0);
-      return;
+      // We don't return here anymore, we let them try if they want
     }
 
     try {
