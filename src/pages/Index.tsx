@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MOCK_NOTES, type Subject, type Unit, type Note } from "@/lib/data";
+import { type Subject, type Unit, type Note } from "@/lib/data";
 import HeroSection from "@/components/HeroSection";
 import SubjectFilter from "@/components/SubjectFilter";
 import UnitTabs from "@/components/UnitTabs";
@@ -34,7 +34,6 @@ const Index = () => {
       <SubjectFilter selected={selectedSubject} onSelect={setSelectedSubject} />
       <UnitTabs selected={selectedUnit} onSelect={setSelectedUnit} />
       <NoteGrid
-        notes={MOCK_NOTES}
         selectedSubject={selectedSubject}
         selectedUnit={selectedUnit}
         onPreview={setPreviewNote}
@@ -50,7 +49,7 @@ const Index = () => {
       <UploadModal
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
-        onUploaded={() => {}}
+        onUploaded={() => { }}
       />
       <PreviewModal
         note={previewNote}

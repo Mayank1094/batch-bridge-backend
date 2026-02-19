@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import api from "@/api/axios";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Check, X, Shield, KeyRound } from "lucide-react";
+import { Loader2, Check, X, Shield, KeyRound, Trash2, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { type Note } from "@/lib/data";
 
@@ -18,7 +18,7 @@ const Admin = () => {
         // If we get 200, we are good
         setLoading(true);
         try {
-            const response = await api.get("/admin/pending", {
+            const response = await api.get("/admin/all", {
                 headers: { "x-admin-password": password },
             });
             setNotes(response.data);
@@ -115,7 +115,7 @@ const Admin = () => {
                 {notes.length === 0 ? (
                     <div className="text-center py-20 glass rounded-xl brutal-border">
                         <p className="text-xl font-bold text-muted-foreground">All caught up! 🎉</p>
-                        <p className="text-sm text-muted-foreground mt-2">No pending notes needing approval.</p>
+                        <p className="text-sm text-muted-foreground mt-2">No notes found.</p>
                     </div>
                 ) : (
                     <div className="grid gap-4">
@@ -126,14 +126,22 @@ const Admin = () => {
                                     initial={{ opacity: 0, x: -20 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     exit={{ opacity: 0, x: 20 }}
-                                    className="bg-card p-4 rounded-lg brutal-border flex flex-col md:flex-row items-center gap-4 justify-between"
+                                    className={`p-4 rounded-lg brutal-border flex flex-col md:flex-row items-center gap-4 justify-between ${note.isApproved ? "bg-card/50" : "bg-card border-primary/50"}`}
                                 >
                                     <div className="flex items-center gap-4 flex-1 w-full">
-                                        <div className="w-12 h-12 rounded bg-muted flex items-center justify-center shrink-0">
+                                        <div className="w-12 h-12 rounded bg-muted flex items-center justify-center shrink-0 relative">
                                             {note.fileUrl?.endsWith(".pdf") ? "📄" : "🖼️"}
+                                            {note.isApproved && (
+                                                <div className="absolute -top-1 -right-1">
+                                                    <CheckCircle2 className="w-4 h-4 text-green-500 bg-white rounded-full" />
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="min-w-0">
-                                            <p className="font-bold truncate">{note.fileName || note.subject}</p>
+                                            <p className="font-bold truncate flex items-center gap-2">
+                                                {note.fileName || note.subject}
+                                                {!note.isApproved && <span className="text-[10px] bg-yellow-500/20 text-yellow-600 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">Pending</span>}
+                                            </p>
                                             <p className="text-xs text-muted-foreground">
                                                 {note.subject} • Unit {note.unit} • {new Date(note.createdAt).toLocaleDateString()}
                                             </p>
@@ -147,20 +155,33 @@ const Admin = () => {
                                             rel="noopener noreferrer"
                                             className="text-sm font-semibold underline decoration-dotted hover:text-primary mr-2"
                                         >
-                                            View File
+                                            View
                                         </a>
-                                        <button
-                                            onClick={() => handleAction(note._id, "reject")}
-                                            className="flex-1 md:flex-none px-4 py-2 bg-destructive/10 text-destructive font-bold rounded-md hover:bg-destructive/20 transition-colors flex items-center justify-center gap-2"
-                                        >
-                                            <X className="w-4 h-4" /> Reject
-                                        </button>
-                                        <button
-                                            onClick={() => handleAction(note._id, "approve")}
-                                            className="flex-1 md:flex-none px-4 py-2 bg-green-500/10 text-green-600 font-bold rounded-md hover:bg-green-500/20 transition-colors flex items-center justify-center gap-2"
-                                        >
-                                            <Check className="w-4 h-4" /> Approve
-                                        </button>
+
+                                        {!note.isApproved ? (
+                                            <>
+                                                <button
+                                                    onClick={() => handleAction(note._id, "reject")}
+                                                    className="flex-1 md:flex-none px-4 py-2 bg-destructive/10 text-destructive font-bold rounded-md hover:bg-destructive/20 transition-colors flex items-center justify-center gap-2"
+                                                >
+                                                    <X className="w-4 h-4" /> Reject
+                                                </button>
+                                                <button
+                                                    onClick={() => handleAction(note._id, "approve")}
+                                                    className="flex-1 md:flex-none px-4 py-2 bg-green-500/10 text-green-600 font-bold rounded-md hover:bg-green-500/20 transition-colors flex items-center justify-center gap-2"
+                                                >
+                                                    <Check className="w-4 h-4" /> Approve
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <button
+                                                onClick={() => handleAction(note._id, "reject")}
+                                                className="flex-1 md:flex-none px-4 py-2 bg-red-500/10 text-red-600 font-bold rounded-md hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
+                                                title="Delete this note"
+                                            >
+                                                <Trash2 className="w-4 h-4" /> Delete
+                                            </button>
+                                        )}
                                     </div>
                                 </motion.div>
                             ))}

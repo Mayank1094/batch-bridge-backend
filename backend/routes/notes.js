@@ -64,12 +64,12 @@ router.get('/notes', async (req, res) => {
     }
 });
 
-// @route   GET /api/admin/pending
-// @desc    Get all pending notes
+// @route   GET /api/admin/all
+// @desc    Get all notes (pending and approved)
 // @access  Private (Admin)
-router.get('/admin/pending', adminAuth, async (req, res) => {
+router.get('/admin/all', adminAuth, async (req, res) => {
     try {
-        const notes = await Note.find({ isApproved: false }).sort({ createdAt: -1 });
+        const notes = await Note.find({}).sort({ isApproved: 1, createdAt: -1 }); // Pending first, then newest
         res.json(notes);
     } catch (error) {
         console.error(error);
